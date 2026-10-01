@@ -1,73 +1,107 @@
 import { Vector2D } from '../math/Vector2D';
+import { Cell } from './Cell';
+import { STATIC_MAP } from './staticmap/staticMap.ts';
+import { BIOME_DATA } from './BiomeData';
 
 export class Environment {
-  // Dimensiones del mundo virtual en píxeles
   public dimensions: Vector2D;
-
-  // Transformaciones de la cámara
   public offset: Vector2D;
   public zoom: number;
 
-  // Configuración visual de la cuadrícula
-  private cellSize: number;
+  private readonly cellSize: number;
+  public readonly cols: number;
+  public readonly rows: number;
 
-  constructor(dimensions: Vector2D = new Vector2D(3000, 3000)) {
+  private grid: Cell[][] = []; 
+
+  // Inyección de dependencias: Recibe el mapa, no lo hardcodea
+  constructor(
+    dimensions: Vector2D = new Vector2D(3000, 3000), 
+    mapBlueprint: string[] = STATIC_MAP
+  ) {
     this.dimensions = dimensions;
     this.offset = new Vector2D(0, 0);
     this.zoom = 1.0;
-    this.cellSize = 50; // Cada celda mide 50x50px
+    this.cellSize = 50;
+
+    this.cols = Math.ceil(this.dimensions.x / this.cellSize);
+    this.rows = Math.ceil(this.dimensions.y / this.cellSize);
+
+    this.generateWorld(mapBlueprint);
   }
 
-  /**
-   * Renderiza el estado actual del mundo en el canvas.
-   * @param ctx Contexto de renderizado 2D.
-   */
+  private generateWorld(map: string[]): void {
+    for (let r = 0; r < this.rows; r++) {
+      const row: Cell[] = [];
+      
+      for (let c = 0; c < this.cols; c++) {
+        // Mantenemos el módulo (%) por seguridad, por si el blueprint 
+        // es más pequeño que las dimensiones del canvas
+        const mapRow = map[r % map.length];
+        const symbol = mapRow![c % mapRow!.length];
+        
+        // Búsqueda en O(1) usando el diccionario. Fallback a Grassland si hay un error tipográfico.
+        const biome = BIOME_DATA[symbol!] || BIOME_DATA['G'];
+
+        row.push(new Cell(c, r, biome!));
+      }
+      
+      this.grid.push(row);
+    }
+  }
+  // 1. Obtiene la celda pasando fila y columna directamente
+  public getCell(col: number, row: number): Cell | null {
+    if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) {
+      return null;
+    }
+    return this.grid[row]?.[col] ?? null;
+  }
+
+    // 2. Traduce una posición en píxeles (Vector2D) a la celda exacta sobre la que está
+  public getCellFromWorldPos(position: Vector2D): Cell | null {
+    const col = Math.floor(position.x / this.cellSize);
+    const row = Math.floor(position.y / this.cellSize);
+    return this.getCell(col, row);
+  }
+
   public draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
-
-    // 1. Limpiar el lienzo
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
-    // 2. Aplicar las transformaciones de la cámara (Zoom y Pan)
     ctx.translate(this.offset.x, this.offset.y);
     ctx.scale(this.zoom, this.zoom);
 
-    // 3. Dibujar el fondo del mundo (Límites)
-    ctx.fillStyle = '#020617'; // slate-950
-    ctx.fillRect(0, 0, this.dimensions.x, this.dimensions.y);
-
-    // 4. Dibujar la cuadrícula interna
+    this.drawBiomes(ctx);
     this.drawGrid(ctx);
 
-    // 5. Dibujar el borde del mapa
-    ctx.strokeStyle = '#334155'; // slate-700
+    ctx.strokeStyle = '#334155';
     ctx.lineWidth = 4;
     ctx.strokeRect(0, 0, this.dimensions.x, this.dimensions.y);
-
     ctx.restore();
   }
 
-  /**
-   * Dibuja las líneas horizontales y verticales dentro de las dimensiones del mundo.
-   */
-  private drawGrid(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = '#1e293b'; // slate-800
-    ctx.lineWidth = 1;
+  private drawBiomes(ctx: CanvasRenderingContext2D): void {
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const cell = this.grid[r]![c];
+        ctx.fillStyle = cell!.biome.color; 
+        ctx.fillRect(c * this.cellSize, r * this.cellSize, this.cellSize, this.cellSize);
+      }
+    }
+  }
 
+  private drawGrid(ctx: CanvasRenderingContext2D): void {
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.3)'; 
+    ctx.lineWidth = 1;
     ctx.beginPath();
 
-    // Líneas verticales
     for (let x = 0; x <= this.dimensions.x; x += this.cellSize) {
       ctx.moveTo(x, 0);
       ctx.lineTo(x, this.dimensions.y);
     }
-
-    // Líneas horizontales
     for (let y = 0; y <= this.dimensions.y; y += this.cellSize) {
       ctx.moveTo(0, y);
       ctx.lineTo(this.dimensions.x, y);
     }
-
     ctx.stroke();
   }
 }
