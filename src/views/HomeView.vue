@@ -2,12 +2,18 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { Vector2D } from '@/core/math/Vector2D';
 import { Environment } from '@/core/world/Environment';
+import { SimulationEngine } from '@/core/engine/SimulationEngine';
+import { AgentFactory } from '@/core/entities/AgentFactory';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
 let environment: Environment;
+let engine: SimulationEngine;
 let animFrameId: number;
 let resizeObserver: ResizeObserver | null = null;
+
+// Control de tiempo para el loop
+let lastTime = 0;
 
 // Estados para el pan (arrastre)
 let isDragging = false;
@@ -17,17 +23,33 @@ const resizeCanvas = () => {
   const canvas = canvasRef.value;
   if (!canvas) return;
 
-  // Sincronizar dimensiones de renderizado interno con el tamaño del cliente
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
 };
 
-const render = (ctx: CanvasRenderingContext2D) => {
-  environment.draw(ctx);
-  animFrameId = requestAnimationFrame(() => render(ctx));
+/**
+ * Bucle de animación independiente.
+ * 'timestamp' es provisto automáticamente por requestAnimationFrame (en milisegundos).
+ */
+const gameLoop = (timestamp: number, ctx: CanvasRenderingContext2D) => {
+  if (!lastTime) lastTime = timestamp;
+
+  // Calculamos el deltaTime seguro en segundos (con un tope máximo de 0.1s para evitar saltos si se cambia de pestaña)
+  const deltaTime = Math.min((timestamp - lastTime) / 1000, 0.1);
+  lastTime = timestamp;
+
+  // 1. El motor actualiza la simulación
+  engine.update(deltaTime);
+
+  // 2. El motor dibuja el mundo y sus entidades
+  engine.draw(ctx);
+
+  // Enlazamos el siguiente frame
+  animFrameId = requestAnimationFrame((nextTimestamp) => gameLoop(nextTimestamp, ctx));
 };
 
-// Eventos de entrada
+// --- EVENTOS DE ENTRADA ---
+
 const handleMouseDown = (e: MouseEvent) => {
   isDragging = true;
   lastMousePosition = new Vector2D(e.clientX, e.clientY);
@@ -50,7 +72,7 @@ const handleWheel = (e: WheelEvent) => {
   e.preventDefault();
   const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
   const minZoom = 0.2;
-  const maxZoom = 3.0;
+  const maxZoom = 5.0;
 
   const newZoom = Math.min(Math.max(environment.zoom * zoomFactor, minZoom), maxZoom);
   const zoomRatio = newZoom / environment.zoom;
@@ -68,10 +90,8 @@ onMounted(() => {
   const canvas = canvasRef.value;
   if (!canvas) return;
 
-  // 1. Ajuste inicial de resolución
   resizeCanvas();
 
-  // 2. Escuchar cambios de tamaño
   resizeObserver = new ResizeObserver(() => {
     resizeCanvas();
   });
@@ -80,8 +100,17 @@ onMounted(() => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  // Instanciamos el entorno y el motor
   environment = new Environment(new Vector2D(3000, 3000));
-  render(ctx);
+  engine = new SimulationEngine(environment);
+
+  const initialEntities = AgentFactory.createInitialPopulation(environment);
+  for (const entity of initialEntities) {
+    engine.addEntity(entity);
+  }
+
+  // Arrancamos el bucle pasando el timestamp inicial
+  animFrameId = requestAnimationFrame((timestamp) => gameLoop(timestamp, ctx));
 });
 
 onUnmounted(() => {
@@ -90,7 +119,6 @@ onUnmounted(() => {
     resizeObserver.disconnect();
   }
 });
-
 </script>
 
 <template>
