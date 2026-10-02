@@ -63,6 +63,23 @@ export class Environment {
     const row = Math.floor(position.y / this.cellSize);
     return this.getCell(col, row);
   }
+  
+  public getCellCenterWorldPos(col: number, row: number): Vector2D {
+  return new Vector2D(
+    col * this.cellSize + this.cellSize / 2,
+    row * this.cellSize + this.cellSize / 2
+  );
+  }
+  public get width(): number {
+    return this.cols * this.cellSize; // ej: 60 * 50 = 3000
+  }
+
+  /**
+   * Alto total del mundo en píxeles
+   */
+  public get height(): number {
+    return this.rows * this.cellSize; // ej: 60 * 50 = 3000
+  }
 
   public draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
