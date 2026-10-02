@@ -1,7 +1,5 @@
 
 //codigo de ia de mientras
-
-
 import { Vector2D } from '../math/Vector2D';
 import { Environment } from '../world/Environment';
 
