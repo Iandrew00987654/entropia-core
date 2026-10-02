@@ -4,10 +4,15 @@ import { Animal } from '../Animal';
 
 export class Rabbit extends Animal {
   private wanderTimer: number = 0;
+  private static sprite: HTMLImageElement | null = null;
 
   constructor(position: Vector2D) {
     // Radio: 6px | Velocidad: 45px/s | Salud: 50
     super(position, 6, 45, 50);
+    if (!Rabbit.sprite) {
+      Rabbit.sprite = new Image();
+      Rabbit.sprite.src = '/sprites/conejo.png'; // Ruta relativa a la carpeta public
+    }
   }
 
   public update(deltaTime: number, environment: Environment): void {
@@ -47,18 +52,33 @@ export class Rabbit extends Animal {
   public draw(ctx: CanvasRenderingContext2D): void {
     if (!this.isAlive) return;
 
-    ctx.save();
     
-    // Dibujo simple del conejo (Gris claro)
-    ctx.fillStyle = '#cbd5e1'; 
-    ctx.beginPath();
-    ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
 
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    if (Rabbit.sprite && Rabbit.sprite.complete) {
+        const spriteSize = 16;
+
+        ctx.drawImage(
+            Rabbit.sprite,
+            this.position.x - spriteSize / 2,
+            this.position.y - spriteSize / 2,
+            spriteSize,
+            spriteSize
+        );
+    } else {
+        ctx.fillStyle = '#cbd5e1';
+        ctx.beginPath();
+        ctx.arc(
+            this.position.x,
+            this.position.y,
+            this.radius,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+    }
 
     ctx.restore();
-  }
+}
 }

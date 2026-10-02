@@ -4,10 +4,16 @@ import { Animal } from '../Animal';
 
 export class Fox extends Animal {
   private wanderTimer: number = 0;
+  private static sprite: HTMLImageElement | null = null;
 
   constructor(position: Vector2D) {
     // Radio: 9px | Velocidad: 60px/s | Salud: 80
     super(position, 9, 60, 80);
+    // 2. Cargar la imagen
+    if (!Fox.sprite) {
+      Fox.sprite = new Image();
+      Fox.sprite.src = '/sprites/zorro.png'; // Asegúrate de tener esta imagen en la carpeta public
+    }
   }
 
   public update(deltaTime: number, environment: Environment): void {
@@ -42,21 +48,42 @@ export class Fox extends Animal {
     }
   }
 
-  public draw(ctx: CanvasRenderingContext2D): void {
+public draw(ctx: CanvasRenderingContext2D): void {
     if (!this.isAlive) return;
 
-    ctx.save();
     
-    // Dibujo del zorro (Naranja / Rojo)
-    ctx.fillStyle = '#ea580c'; 
-    ctx.beginPath();
-    ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
 
-    ctx.strokeStyle = '#7c2d12';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // Dibujar el sprite si ya cargó
+    if (Fox.sprite && Fox.sprite.complete) {
+        const spriteSize = 24;
+
+        ctx.drawImage(
+            Fox.sprite,
+            this.position.x - spriteSize / 2,
+            this.position.y - spriteSize / 2,
+            spriteSize,
+            spriteSize
+        );
+    } else {
+        // Fallback: círculo naranja
+        ctx.fillStyle = '#ea580c';
+        ctx.beginPath();
+        ctx.arc(
+            this.position.x,
+            this.position.y,
+            this.radius,
+            0,
+            Math.PI * 2
+        );
+        ctx.fill();
+
+        ctx.strokeStyle = '#7c2d12';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
 
     ctx.restore();
-  }
+}
 }
