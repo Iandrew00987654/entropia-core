@@ -28,7 +28,7 @@ export class Tree extends Plant {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     // 2. Escala dinámica según 'growth'
-    const scale = 0.2 + (this.growth * 0.8);
+    const scale = 0.4 + (this.growth * 0.6); // 40% al nacer -> 100% al madurar
     const currentSize = this.maxSpriteSize * scale;
 
     // 3. Renderizado con Sprite o Fallback concéntrico
