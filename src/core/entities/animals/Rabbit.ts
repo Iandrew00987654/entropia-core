@@ -57,7 +57,7 @@ export class Rabbit extends Animal {
     ctx.imageSmoothingEnabled = false;
 
     if (Rabbit.sprite && Rabbit.sprite.complete) {
-        const spriteSize = 16;
+        const spriteSize = 10;
 
         ctx.drawImage(
             Rabbit.sprite,

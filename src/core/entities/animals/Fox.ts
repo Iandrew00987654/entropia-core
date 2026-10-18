@@ -57,7 +57,7 @@ public draw(ctx: CanvasRenderingContext2D): void {
 
     // Dibujar el sprite si ya cargó
     if (Fox.sprite && Fox.sprite.complete) {
-        const spriteSize = 24;
+        const spriteSize = 20;
 
         ctx.drawImage(
             Fox.sprite,
