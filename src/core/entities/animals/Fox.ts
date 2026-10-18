@@ -37,8 +37,8 @@ export class Fox extends Animal {
   }
 
   private keepInBounds(environment: Environment, deltaTime: number): void {
-    const nextX = this.position.x + this.velocity.x * this.speed * 0.016;
-    const nextY = this.position.y + this.velocity.y * this.speed * 0.016;
+    const nextX = this.position.x + this.velocity.x * this.speed * deltaTime;
+    const nextY = this.position.y + this.velocity.y * this.speed * deltaTime;
 
     if (nextX <= this.radius || nextX >= environment.width - this.radius) {
       this.velocity = new Vector2D(-this.velocity.x, this.velocity.y);
