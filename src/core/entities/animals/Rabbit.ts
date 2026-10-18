@@ -31,13 +31,13 @@ export class Rabbit extends Animal {
     }
 
     // 2. Evitar salir del mapa (Rebote simple)
-    this.keepInBounds(environment);
+    this.keepInBounds(environment, deltaTime);
 
     // 3. Ejecutar el movimiento físico de la clase base
     super.update(deltaTime, environment);
   }
 
-  private keepInBounds(environment: Environment): void {
+  private keepInBounds(environment: Environment,deltaTime: number): void {
     const nextX = this.position.x + this.velocity.x * this.speed * 0.016;
     const nextY = this.position.y + this.velocity.y * this.speed * 0.016;
 

@@ -30,13 +30,13 @@ export class Fox extends Animal {
     }
 
     // 2. Evitar salir del mapa
-    this.keepInBounds(environment);
+    this.keepInBounds(environment, deltaTime);
 
     // 3. Ejecutar movimiento base
     super.update(deltaTime, environment);
   }
 
-  private keepInBounds(environment: Environment): void {
+  private keepInBounds(environment: Environment, deltaTime: number): void {
     const nextX = this.position.x + this.velocity.x * this.speed * 0.016;
     const nextY = this.position.y + this.velocity.y * this.speed * 0.016;
 
