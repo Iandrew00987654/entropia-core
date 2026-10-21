@@ -1,42 +1,33 @@
 import { Vector2D } from '../../math/Vector2D';
-import { Environment } from '../../world/Environment';
 import { BiomeType } from '../../world/Biome';
 import { Animal } from '../Animal';
+import { WanderState } from '../../ai/states/WanderState';
+import { EatPlantState } from '../../ai/states/EatPlantState';
+import { FleeState } from '../../ai/states/FleeState';
 
 export class Rabbit extends Animal {
-  private wanderTimer: number = 0;
+  // Instancias de estados para esta especie
+  public wanderState: WanderState;
+  public eatState: EatPlantState;
+  public fleeState: FleeState;
+
   private static sprite: HTMLImageElement | null = null;
 
   constructor(position: Vector2D) {
-    // Radio: 6px | Velocidad: 15px/s | Salud: 50 | Biomas: Pradera y Bosque
-    super(position, 6, 15, 50, [BiomeType.GRASSLAND, BiomeType.FOREST]);
+    // Parámetros: Posición, Radio (6), Velocidad (15), Salud (50), Biomas permitidos, isPredator (false), MaxEnergía (100)
+    super(position, 6, 15, 50, [BiomeType.GRASSLAND, BiomeType.FOREST], false, 100);
+
+    // Inicialización de la máquina de estados
+    this.wanderState = new WanderState();
+    this.eatState = new EatPlantState();
+    this.fleeState = new FleeState(100);
+
+    this.changeState(this.wanderState);
 
     if (!Rabbit.sprite) {
       Rabbit.sprite = new Image();
       Rabbit.sprite.src = '/sprites/conejo.png';
     }
-  }
-
-  public update(deltaTime: number, environment: Environment): void {
-    if (!this.isAlive) return;
-
-    // 1. Lógica de vagar
-    this.wanderTimer -= deltaTime;
-    if (this.wanderTimer <= 0) {
-      const angle = Math.random() * Math.PI * 2;
-      this.velocity = new Vector2D(Math.cos(angle), Math.sin(angle));
-      this.wanderTimer = 1 + Math.random() * 2;
-    }
-
-    // 2. Confinamiento de bioma y mapa
-    const collided = this.keepInBoundsAndBiome(environment, deltaTime);
-    if (collided) {
-      // Si choca con el borde de su bioma, forzar un nuevo rumbo en breve
-      this.wanderTimer = 0.5 + Math.random() * 0.5;
-    }
-
-    // 3. Movimiento físico base
-    super.update(deltaTime, environment);
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
@@ -45,8 +36,9 @@ export class Rabbit extends Animal {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
 
+    // 1. Dibujar Sprite o Fallback
     if (Rabbit.sprite && Rabbit.sprite.complete && Rabbit.sprite.naturalWidth > 0) {
-      const spriteSize = 10; // Ajusta según el tamaño del sprite
+      const spriteSize = 10; // Tamaño del sprite en píxeles
       ctx.drawImage(
         Rabbit.sprite,
         this.position.x - spriteSize / 2,
@@ -59,6 +51,19 @@ export class Rabbit extends Animal {
       ctx.beginPath();
       ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
       ctx.fill();
+    }
+
+    // 2. Barra de progreso visual si está comiendo
+    if (this.currentState === this.eatState && this.eatState.eatingTimer > 0) {
+      const progress = 1 - (this.eatState.eatingTimer / this.eatState.requiredDuration);
+      const barWidth = 14;
+      const barHeight = 2.5;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(this.position.x - barWidth / 2, this.position.y - 12, barWidth, barHeight);
+
+      ctx.fillStyle = '#c70808'; // rojo progreso
+      ctx.fillRect(this.position.x - barWidth / 2, this.position.y - 12, barWidth * progress, barHeight);
     }
 
     ctx.restore();

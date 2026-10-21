@@ -2,6 +2,7 @@ import { Vector2D } from '../math/Vector2D';
 import { Environment } from '../world/Environment';
 import { BiomeType } from '../world/Biome';
 import { Entity } from './Entity';
+import type { State } from '../ai/State';
 
 export abstract class Animal extends Entity {
   public velocity: Vector2D;
@@ -9,25 +10,48 @@ export abstract class Animal extends Entity {
   public health: number;
   public maxHealth: number;
 
-  // Lista de biomas donde la especie puede sobrevivir y transitar
+  // Metabolismo
+  public energy: number;
+  public maxEnergy: number;
+
+  // Rol ecológico
+  public isPredator: boolean = false;
   public allowedBiomes: BiomeType[] = [];
+
+  // Máquina de Estados
+  public currentState: State<any> | null = null;
 
   constructor(
     position: Vector2D,
     radius: number,
     speed: number,
     maxHealth: number,
-    allowedBiomes: BiomeType[] = []
+    allowedBiomes: BiomeType[] = [],
+    isPredator: boolean = false,
+    maxEnergy: number = 100,
   ) {
     super(position, radius);
     this.velocity = new Vector2D(0, 0);
     this.speed = speed;
     this.maxHealth = maxHealth;
     this.health = maxHealth;
+    this.maxEnergy = maxEnergy;
+    this.energy = maxEnergy;
     this.allowedBiomes = allowedBiomes;
+    this.isPredator = isPredator;
   }
 
-  public update(deltaTime: number, environment: Environment): void {
+  public changeState(newState: State<any>): void {
+    if (this.currentState?.exit) {
+      this.currentState.exit(this);
+    }
+    this.currentState = newState;
+    if (this.currentState?.enter) {
+      this.currentState.enter(this);
+    }
+  }
+
+  public update(deltaTime: number, environment: Environment, entities: Entity[]): void {
     if (!this.isAlive) return;
 
     if (this.health <= 0) {
@@ -35,6 +59,12 @@ export abstract class Animal extends Entity {
       return;
     }
 
+    // 1. Delegación a la Máquina de Estados
+    if (this.currentState) {
+      this.currentState.update(this, deltaTime, environment, entities);
+    }
+
+    // 2. Desplazamiento cinemático
     this.move(deltaTime);
   }
 
@@ -64,7 +94,7 @@ export abstract class Animal extends Entity {
    * Evalúa los ejes X e Y por separado con predicción por radio.
    * @returns true si hubo un rebote/colisión
    */
-  protected keepInBoundsAndBiome(environment: Environment, deltaTime: number): boolean {
+  public keepInBoundsAndBiome(environment: Environment, deltaTime: number): boolean {
     let bounced = false;
 
     const stepX = this.velocity.x * this.speed * deltaTime;
