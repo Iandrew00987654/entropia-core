@@ -1,5 +1,3 @@
-
-//codigo de ia de mientras
 import { Vector2D } from '../math/Vector2D';
 import { Environment } from '../world/Environment';
 
@@ -28,8 +26,9 @@ export abstract class Entity {
    * Debe ser implementado obligatoriamente por las subclases.
    * @param deltaTime Tiempo transcurrido desde el último frame (en segundos).
    * @param environment Referencia al entorno donde habita la entidad.
+   * @param _entities Lista de todas las entidades en el entorno.
    */
-  public abstract update(deltaTime: number, environment: Environment): void;
+  public abstract update(deltaTime: number, environment: Environment, _entities: Entity[]): void;
 
   /**
    * Método abstracto para renderizar la entidad en el canvas.

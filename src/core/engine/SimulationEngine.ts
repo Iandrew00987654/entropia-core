@@ -46,7 +46,7 @@ export class SimulationEngine {
       }
 
       // Actualizamos la entidad pasándole el tiempo escalado y el mundo
-      entity.update(scaledDeltaTime, this.environment);
+      entity.update(scaledDeltaTime, this.environment, this.entities);
     }
   }
 
