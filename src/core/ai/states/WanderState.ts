@@ -19,9 +19,17 @@ export class WanderState implements State<Animal> {
       }
       return;
     }
+    // 2. Necesidad de descanso
+    if (agent.energy < 25) {
+      if ((agent as any).restState) {
+        agent.changeState((agent as any).restState);
+      }
+      return;
+    }
 
-    // 2. Necesidad de alimentarse
-    if (agent.energy < 80) {
+
+    // 3. Necesidad de alimentarse
+    if (agent.energy < 75) {
       const food = this.findNearestEdiblePlant(agent, entities);
       if (food && (agent as any).eatState) {
         (agent as any).eatState.setTarget(food);

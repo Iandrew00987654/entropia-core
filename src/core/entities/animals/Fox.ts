@@ -2,6 +2,7 @@ import { Vector2D } from '../../math/Vector2D';
 import { Environment } from '../../world/Environment';
 import { BiomeType } from '../../world/Biome';
 import { Animal } from '../Animal';
+import { Entity } from '../Entity';
 
 export class Fox extends Animal {
   private wanderTimer: number = 0;
@@ -9,7 +10,7 @@ export class Fox extends Animal {
 
   constructor(position: Vector2D) {
     // Radio: 9px | Velocidad: 12px/s | Salud: 80 | Biomas: Bosque y Pradera
-    super(position, 9, 12, 80, [BiomeType.FOREST, BiomeType.GRASSLAND]);
+    super(position, 9, 12, 80, [BiomeType.FOREST, BiomeType.GRASSLAND],true, 100);
 
     if (!Fox.sprite) {
       Fox.sprite = new Image();
@@ -17,7 +18,7 @@ export class Fox extends Animal {
     }
   }
 
-  public update(deltaTime: number, environment: Environment): void {
+  public update(deltaTime: number, environment: Environment, entities: Entity[]): void {
     if (!this.isAlive) return;
 
     // 1. Patrullaje
@@ -28,15 +29,16 @@ export class Fox extends Animal {
       this.wanderTimer = 2 + Math.random() * 3;
     }
 
-    // 2. Confinamiento de bioma y límites
+    // 2. Límites
     const collided = this.keepInBoundsAndBiome(environment, deltaTime);
     if (collided) {
       this.wanderTimer = 1 + Math.random();
-    }
-
-    // 3. Movimiento físico base
-    super.update(deltaTime, environment);
   }
+
+    // 3. Físicas base
+    super.update(deltaTime, environment, entities);
+  }
+
 
   public draw(ctx: CanvasRenderingContext2D): void {
     if (!this.isAlive) return;

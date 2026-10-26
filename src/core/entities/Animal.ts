@@ -67,10 +67,18 @@ export abstract class Animal extends Entity {
     // 2. Desplazamiento cinemático
     this.move(deltaTime);
   }
+  // 3. Consumo de energía con el tiempo
+
+  public energyDrainRate: number = 4;
 
   protected move(deltaTime: number): void {
     const directionMagnitude = this.velocity.multiply(this.speed * deltaTime);
     this.position = this.position.add(directionMagnitude);
+    
+    // Si el animal se está moviendo, consume energía
+    if (this.velocity.x !== 0 || this.velocity.y !== 0) {
+      this.energy = Math.max(0, this.energy - this.energyDrainRate * deltaTime);
+    }
   }
 
   public takeDamage(amount: number): void {

@@ -4,23 +4,26 @@ import { Animal } from '../Animal';
 import { WanderState } from '../../ai/states/WanderState';
 import { EatPlantState } from '../../ai/states/EatPlantState';
 import { FleeState } from '../../ai/states/FleeState';
+import { RestState } from '../../ai/states/RestState';
 
 export class Rabbit extends Animal {
-  // Instancias de estados para esta especie
   public wanderState: WanderState;
   public eatState: EatPlantState;
   public fleeState: FleeState;
+  public restState: RestState;
 
   private static sprite: HTMLImageElement | null = null;
 
   constructor(position: Vector2D) {
-    // Parámetros: Posición, Radio (6), Velocidad (15), Salud (50), Biomas permitidos, isPredator (false), MaxEnergía (100)
     super(position, 6, 15, 50, [BiomeType.GRASSLAND, BiomeType.FOREST], false, 100);
 
-    // Inicialización de la máquina de estados
+    // Inicializamos con energía media para ver el ciclo activo de inmediato
+    this.energy = 40 + Math.random() * 30;
+
     this.wanderState = new WanderState();
     this.eatState = new EatPlantState();
-    this.fleeState = new FleeState(100);
+    this.fleeState = new FleeState(110);
+    this.restState = new RestState();
 
     this.changeState(this.wanderState);
 
@@ -36,9 +39,9 @@ export class Rabbit extends Animal {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
 
-    // 1. Dibujar Sprite o Fallback
+    // 1. Sprite o fallback del conejo
     if (Rabbit.sprite && Rabbit.sprite.complete && Rabbit.sprite.naturalWidth > 0) {
-      const spriteSize = 10; // Tamaño del sprite en píxeles
+      const spriteSize = 10;
       ctx.drawImage(
         Rabbit.sprite,
         this.position.x - spriteSize / 2,
@@ -53,17 +56,29 @@ export class Rabbit extends Animal {
       ctx.fill();
     }
 
-    // 2. Barra de progreso visual si está comiendo
+    // 2. Feedback visual según el estado activo:
+
+    // A. Comiendo: Barra de progreso verde
     if (this.currentState === this.eatState && this.eatState.eatingTimer > 0) {
       const progress = 1 - (this.eatState.eatingTimer / this.eatState.requiredDuration);
-      const barWidth = 14;
-      const barHeight = 2.5;
-
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(this.position.x - barWidth / 2, this.position.y - 12, barWidth, barHeight);
+      ctx.fillRect(this.position.x - 7, this.position.y - 12, 14, 3);
+      ctx.fillStyle = '#fd0000';
+      ctx.fillRect(this.position.x - 7, this.position.y - 12, 14 * progress, 3);
+    }
 
-      ctx.fillStyle = '#c70808'; // rojo progreso
-      ctx.fillRect(this.position.x - barWidth / 2, this.position.y - 12, barWidth * progress, barHeight);
+    // B. Descansando: Indicador de sueño (Zzz)
+    if (this.currentState === this.restState) {
+      ctx.fillStyle = '#38bdf8'; // Azul claro
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText('zZ', this.position.x + 4, this.position.y - 6);
+    }
+
+    // C. Huyendo: Alerta roja
+    if (this.currentState === this.fleeState) {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText('!', this.position.x - 3, this.position.y - 10);
     }
 
     ctx.restore();
