@@ -1,9 +1,16 @@
+<!-- src/views/HomeView.vue -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { Vector2D } from '@/core/math/Vector2D';
 import { Environment } from '@/core/world/Environment';
 import { SimulationEngine } from '@/core/engine/SimulationEngine';
 import { AgentFactory } from '@/core/entities/AgentFactory';
+import { Animal } from '@/core/entities/Animal';
+import { Plant } from '@/core/entities/Plant';
+import { Rabbit } from '@/core/entities/animals/Rabbit';
+import { Fox } from '@/core/entities/animals/Fox';
+import InspectorPanel from '@/components/InspectorPanel.vue';
+import type { InspectorTelemetry, AnimalInteractionData } from '@/types/telemetry';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 
@@ -11,76 +18,220 @@ let environment: Environment;
 let engine: SimulationEngine;
 let animFrameId: number;
 let resizeObserver: ResizeObserver | null = null;
+let telemetryIntervalId: number;
 
-// Control de tiempo para el loop
 let lastTime = 0;
 
-// Estados para la navegación de cámara (Pan)
+// Navegación de cámara y detección de clics limpios
 let isDragging = false;
-let lastMousePosition = new Vector2D(0, 0);
+let dragStartPos = new Vector2D(0, 0);
+let lastMousePos = new Vector2D(0, 0);
+let hasMoved = false;
+
+// Estado reactivo que alimenta el panel inspector
+const telemetry = ref<InspectorTelemetry>({
+  mode: 'NONE',
+  global: { total: 0, rabbits: 0, foxes: 0, plants: 0, day: 1, clock: '00:00', isNight: false }
+});
 
 const resizeCanvas = () => {
   const canvas = canvasRef.value;
   if (!canvas) return;
-
-  // Sincroniza la resolución interna del canvas con su tamaño real en pantalla
   canvas.width = canvas.clientWidth;
   canvas.height = canvas.clientHeight;
 };
 
-/**
- * Game Loop independiente ejecutado fuera de la reactividad de Vue.
- */
 const gameLoop = (timestamp: number, ctx: CanvasRenderingContext2D) => {
   if (!lastTime) lastTime = timestamp;
-
-  // deltaTime seguro en segundos con límite superior (cap) de 0.1s para evitar saltos
   const deltaTime = Math.min((timestamp - lastTime) / 1000, 0.1);
   lastTime = timestamp;
 
-  // 1. Lógica del motor (física, estados, ciclo día/noche)
   engine.update(deltaTime);
-
-  // 2. Renderizado en capas (mundo -> noche -> HUD flotante)
   engine.draw(ctx);
 
   animFrameId = requestAnimationFrame((nextTimestamp) => gameLoop(nextTimestamp, ctx));
 };
 
-// --- GESTIÓN DE EVENTOS DE ENTRADA (HUD & CÁMARA) ---
+// Sincronización a 10 Hz (desacoplada de los 60 FPS del canvas)
+const updateTelemetryDTO = () => {
+  if (!engine) return;
+
+  const entities = engine.entities;
+  let rabbitCount = 0;
+  let foxCount = 0;
+  let plantCount = 0;
+
+  for (const e of entities) {
+    if (e instanceof Rabbit) rabbitCount++;
+    else if (e instanceof Fox) foxCount++;
+    else if (e instanceof Plant) plantCount++;
+  }
+
+  const globalData = {
+    total: entities.length,
+    rabbits: rabbitCount,
+    foxes: foxCount,
+    plants: plantCount,
+    day: engine.dayNightSystem.currentDay,
+    clock: engine.dayNightSystem.getFormattedTime(),
+    isNight: engine.dayNightSystem.isNight
+  };
+
+  const sel = engine.selectedEntity;
+
+  if (!sel) {
+    telemetry.value = { mode: 'NONE', global: globalData };
+    return;
+  }
+
+  const cell = environment.getCellFromWorldPos(sel.position);
+  const biomeName = cell?.biome.name ?? 'Desconocido';
+  const ageSec = Math.floor(sel.age);
+  const ageFormatted = `${Math.floor(ageSec / 60)}m ${ageSec % 60}s`;
+
+  if (sel instanceof Animal) {
+    let interactionData: AnimalInteractionData = { type: 'NONE', title: 'Ninguna' };
+    const stName = sel.currentState?.name ?? 'WANDERING';
+
+    if (stName === 'EATING' && (sel as any).eatState) {
+      const eat = (sel as any).eatState;
+      const progress = 1 - Math.max(0, eat.eatingTimer / eat.requiredDuration);
+      interactionData = {
+        type: 'EATING',
+        title: 'Consumiendo Vegetación',
+        targetSpecies: eat.targetPlant?.speciesName ?? 'Hierba',
+        targetId: eat.targetPlant?.id.substring(0, 5),
+        progress: progress * 100,
+        progressText: `${(eat.requiredDuration - eat.eatingTimer).toFixed(1)}s / ${eat.requiredDuration}s`
+      };
+    } else if (stName === 'CHASING' && (sel as any).chaseState) {
+      const chase = (sel as any).chaseState;
+      interactionData = {
+        type: 'CHASING',
+        title: 'Persiguiendo Presa',
+        targetSpecies: chase.targetPrey?.speciesName ?? 'Presa',
+        targetId: chase.targetPrey?.id.substring(0, 5)
+      };
+    } else if (stName === 'FLEEING' && (sel as any).fleeState) {
+      const flee = (sel as any).fleeState;
+      interactionData = {
+        type: 'FLEEING',
+        title: 'Evadiendo Amenaza',
+        targetSpecies: flee.currentThreat?.speciesName ?? 'Depredador',
+        targetId: flee.currentThreat?.id.substring(0, 5)
+      };
+    } else if (stName === 'RESTING') {
+      interactionData = {
+        type: 'RESTING',
+        title: 'Recuperando Energía'
+      };
+    }
+
+    telemetry.value = {
+      mode: 'ANIMAL',
+      global: globalData,
+      entity: {
+        kind: 'ANIMAL',
+        id: sel.id,
+        shortId: sel.id.substring(0, 6).toUpperCase(),
+        species: sel.speciesName,
+        isAlive: sel.isAlive,
+        ageFormatted,
+        biomeName,
+        posX: sel.position.x.toFixed(1),
+        posY: sel.position.y.toFixed(1),
+        col: cell?.x ?? 0,
+        row: cell?.y ?? 0,
+        radius: sel.radius,
+        health: Math.round(sel.health),
+        maxHealth: sel.maxHealth,
+        healthPct: Math.round((sel.health / sel.maxHealth) * 100),
+        energy: Math.round(sel.energy),
+        maxEnergy: sel.maxEnergy,
+        energyPct: Math.round((sel.energy / sel.maxEnergy) * 100),
+        speed: Math.round(sel.speed),
+        stateName: stName,
+        interaction: interactionData
+      }
+    };
+  } else if (sel instanceof Plant) {
+    telemetry.value = {
+      mode: 'PLANT',
+      global: globalData,
+      entity: {
+        kind: 'PLANT',
+        id: sel.id,
+        shortId: sel.id.substring(0, 6).toUpperCase(),
+        species: sel.speciesName,
+        isAlive: sel.isAlive,
+        ageFormatted,
+        biomeName,
+        posX: sel.position.x.toFixed(1),
+        posY: sel.position.y.toFixed(1),
+        col: cell?.x ?? 0,
+        row: cell?.y ?? 0,
+        radius: Math.round(sel.radius),
+        growthPct: Math.round(sel.growth * 100),
+        maxRadius: sel.maxRadius
+      }
+    };
+  }
+};
+
+// --- GESTIÓN DE ENTRADAS ---
 
 const handleMouseDown = (e: MouseEvent) => {
   const canvas = canvasRef.value;
   if (!canvas || !engine) return;
 
-  // Calculamos la posición del puntero relativa a la esquina superior izquierda del canvas
   const rect = canvas.getBoundingClientRect();
   const mouseX = e.clientX - rect.left;
   const mouseY = e.clientY - rect.top;
 
-  // 🛡️ 1. Prioridad a la UI: Si el click cae sobre el HUD, procesar el botón y cancelar el Pan
-  const consumedByHUD = engine.canvasHUD.handleClick(mouseX, mouseY, engine);
-  if (consumedByHUD) {
+  if (engine.canvasHUD.handleClick(mouseX, mouseY, engine)) {
     isDragging = false;
     return;
   }
 
-  // 2. Si no tocó la UI, iniciar el arrastre del mapa
   isDragging = true;
-  lastMousePosition = new Vector2D(e.clientX, e.clientY);
+  hasMoved = false;
+  dragStartPos = new Vector2D(e.clientX, e.clientY);
+  lastMousePos = new Vector2D(e.clientX, e.clientY);
 };
 
 const handleMouseMove = (e: MouseEvent) => {
   if (!isDragging) return;
 
-  const currentPosition = new Vector2D(e.clientX, e.clientY);
-  const delta = currentPosition.subtract(lastMousePosition);
+  const currentPos = new Vector2D(e.clientX, e.clientY);
+  if (currentPos.distance(dragStartPos) > 4) {
+    hasMoved = true;
+  }
 
+  const delta = currentPos.subtract(lastMousePos);
   environment.offset = environment.offset.add(delta);
-  lastMousePosition = currentPosition;
+  lastMousePos = currentPos;
 };
 
-const handleMouseUp = () => {
+const handleMouseUp = (e: MouseEvent) => {
+  const canvas = canvasRef.value;
+  if (!canvas || !engine) {
+    isDragging = false;
+    return;
+  }
+
+  // Clic limpio (sin arrastre de cámara) -> Selección de entidad
+  if (!hasMoved) {
+    const rect = canvas.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const worldX = (screenX - environment.offset.x) / environment.zoom;
+    const worldY = (screenY - environment.offset.y) / environment.zoom;
+
+    engine.selectEntityAt(new Vector2D(worldX, worldY));
+    updateTelemetryDTO();
+  }
+
   isDragging = false;
 };
 
@@ -94,7 +245,6 @@ const handleWheel = (e: WheelEvent) => {
   const zoomRatio = newZoom / environment.zoom;
   const mousePos = new Vector2D(e.clientX, e.clientY);
 
-  // Zoom enfocado hacia el cursor
   environment.offset = new Vector2D(
     mousePos.x - (mousePos.x - environment.offset.x) * zoomRatio,
     mousePos.y - (mousePos.y - environment.offset.y) * zoomRatio
@@ -103,45 +253,48 @@ const handleWheel = (e: WheelEvent) => {
   environment.zoom = newZoom;
 };
 
+const deselectEntity = () => {
+  if (engine) {
+    engine.selectedEntity = null;
+    updateTelemetryDTO();
+  }
+};
+
 onMounted(() => {
   const canvas = canvasRef.value;
   if (!canvas) return;
 
   resizeCanvas();
 
-  resizeObserver = new ResizeObserver(() => {
-    resizeCanvas();
-  });
+  resizeObserver = new ResizeObserver(() => resizeCanvas());
   resizeObserver.observe(canvas);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  // 1. Instanciamos el entorno y el motor
   environment = new Environment(new Vector2D(3000, 3000));
   engine = new SimulationEngine(environment);
 
-  // 2. Población inicial
   const initialEntities = AgentFactory.createInitialPopulation(environment);
   for (const entity of initialEntities) {
     engine.addEntity(entity);
   }
 
-  // 3. Inicio del Game Loop
   animFrameId = requestAnimationFrame((timestamp) => gameLoop(timestamp, ctx));
+  telemetryIntervalId = window.setInterval(updateTelemetryDTO, 100);
 });
 
 onUnmounted(() => {
   cancelAnimationFrame(animFrameId);
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
+  if (telemetryIntervalId) clearInterval(telemetryIntervalId);
+  if (resizeObserver) resizeObserver.disconnect();
 });
 </script>
 
 <template>
-  <div class="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
-    <main class="flex-1 relative bg-slate-900 flex items-center justify-center p-4">
+  <div class="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans select-none">
+    <!-- CANVAS PRINCIPAL -->
+    <main class="flex-1 relative bg-slate-900 flex items-center justify-center p-3">
       <canvas 
         ref="canvasRef" 
         @mousedown="handleMouseDown"
@@ -153,8 +306,10 @@ onUnmounted(() => {
       ></canvas>
     </main>
 
-    <aside class="w-96 border-l border-slate-800 bg-slate-950 flex flex-col h-full">
-      <!-- Reservado para Controles e Inspector Lateral -->
-    </aside>
+    <!-- COMPONENTE DEDICADO DEL PANEL INSPECTOR -->
+    <InspectorPanel 
+      :telemetry="telemetry" 
+      @close="deselectEntity" 
+    />
   </div>
 </template>

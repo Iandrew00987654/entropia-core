@@ -59,12 +59,12 @@ export abstract class Animal extends Entity {
       return;
     }
 
-    // 1. Delegación a la Máquina de Estados
+    this.age += deltaTime; // ⏱️ Registro de longevidad
+
     if (this.currentState) {
       this.currentState.update(this, deltaTime, environment, entities);
     }
 
-    // 2. Desplazamiento cinemático
     this.move(deltaTime);
   }
   // 3. Consumo de energía con el tiempo

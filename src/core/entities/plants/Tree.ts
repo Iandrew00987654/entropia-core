@@ -3,6 +3,7 @@ import { Plant } from '../Plant';
 
 export class Tree extends Plant {
   public foliageColor: string;
+  public readonly speciesName: string = 'Árbol';
   public trunkColor: string;
 
   // 1. Caché estática del sprite

@@ -9,6 +9,7 @@ export class Fox extends Animal {
   public wanderState: WanderState;
   public chaseState: ChaseState;
   public restState: RestState;
+  public readonly speciesName: string = 'Zorro';
 
   private static sprite: HTMLImageElement | null = null;
 

@@ -11,6 +11,7 @@ export class Rabbit extends Animal {
   public eatState: EatPlantState;
   public fleeState: FleeState;
   public restState: RestState;
+  public readonly speciesName: string = 'Conejo';
 
   private static sprite: HTMLImageElement | null = null;
 

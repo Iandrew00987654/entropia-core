@@ -6,6 +6,7 @@ import { Vector2D } from '../../math/Vector2D';
 
 export class FleeState implements State<Animal> {
   public readonly name = 'FLEEING';
+  public currentThreat: Animal | null = null;
   private readonly fleeDistance: number;
 
   constructor(fleeDistance: number = 100) {
@@ -14,6 +15,7 @@ export class FleeState implements State<Animal> {
 
   public update(agent: Animal, deltaTime: number, environment: Environment, entities: Entity[]): void {
     const danger = this.findNearestPredator(agent, entities);
+    this.currentThreat = danger;
 
     if (!danger) {
       // Peligro superado: regresa a vagar (asume que el animal expone su wanderState)

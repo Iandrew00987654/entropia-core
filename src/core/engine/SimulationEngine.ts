@@ -2,19 +2,21 @@ import { Environment } from '../world/Environment';
 import { Entity } from '../entities/Entity';
 import { DayNightSystem } from './DayNightSystem';
 import { CanvasHUD } from '../ui/CanvasHUD';
+import { Vector2D } from '../math/Vector2D';
 
 export class SimulationEngine {
   public environment: Environment;
-  private entities: Entity[] = [];
+  public entities: Entity[] = [];
 
-  // Controles de simulación y tiempo
   public simulationTime: number = 0;
   public timeScale: number = 1.0;
   public isPaused: boolean = false;
 
-  // Subsistemas
   public dayNightSystem: DayNightSystem;
   public canvasHUD: CanvasHUD;
+
+  // 🎯 Entidad actualmente seleccionada para el inspector
+  public selectedEntity: Entity | null = null;
 
   constructor(environment: Environment) {
     this.environment = environment;
@@ -31,41 +33,41 @@ export class SimulationEngine {
   }
 
   /**
-   * Conecta los eventos de click del canvas a la UI flotante.
+   * Intenta seleccionar una entidad bajo las coordenadas de clic en el mundo.
+   * Utiliza un radio de tolerancia mínimo para facilitar el clic en pantallas de alta densidad.
    */
-  public attachInputListeners(canvas: HTMLCanvasElement): void {
-    canvas.addEventListener('click', (event) => {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
+  public selectEntityAt(worldPos: Vector2D): Entity | null {
+    // Buscamos de adelante hacia atrás (lo último dibujado está encima)
+    for (let i = this.entities.length - 1; i >= 0; i--) {
+      const entity = this.entities[i]!;
+      if (!entity.isAlive) continue;
 
-      // Intenta procesar el click en la UI
-      const handled = this.canvasHUD.handleClick(mouseX, mouseY, this);
-      
-      if (handled) {
-        // El click fue consumido por un botón de la UI (no afecta al mapa)
-        event.stopPropagation();
+      const hitTolerance = Math.max(entity.radius * 1.5, 14);
+      if (entity.position.distance(worldPos) <= hitTolerance) {
+        this.selectedEntity = entity;
+        return entity;
       }
-    });
+    }
+
+    this.selectedEntity = null;
+    return null;
   }
 
   public update(realDeltaTime: number): void {
-    // Si la simulación está pausada, el delta escalado es cero
     const scaledDeltaTime = this.isPaused ? 0 : realDeltaTime * this.timeScale;
-    
     this.simulationTime += scaledDeltaTime;
 
-    // 1. Actualizar el ciclo Día/Noche
     this.dayNightSystem.update(scaledDeltaTime);
 
-    // 2. Si está pausado, omitimos el movimiento de las entidades
     if (this.isPaused) return;
 
-    // 3. Actualizar entidades (iteración inversa segura)
     for (let i = this.entities.length - 1; i >= 0; i--) {
       const entity = this.entities[i]!;
 
       if (!entity.isAlive) {
+        if (this.selectedEntity?.id === entity.id) {
+          // Si la entidad seleccionada muere, la mantenemos como referencia pero marcada
+        }
         this.entities.splice(i, 1);
         continue;
       }
@@ -75,10 +77,10 @@ export class SimulationEngine {
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
-    // 1. Terreno y Biomas (con su propia transformación de cámara)
+    // 1. Fondo del mundo
     this.environment.draw(ctx);
 
-    // 2. Entidades (con transformación de cámara)
+    // 2. Entidades con la cámara activa
     ctx.save();
     ctx.translate(this.environment.offset.x, this.environment.offset.y);
     ctx.scale(this.environment.zoom, this.environment.zoom);
@@ -86,13 +88,63 @@ export class SimulationEngine {
     for (const entity of this.entities) {
       entity.draw(ctx);
     }
+
+    // 🎯 Dibujar Retícula de Selección si hay una entidad marcada
+    if (this.selectedEntity && this.selectedEntity.isAlive) {
+      this.drawSelectionReticle(ctx, this.selectedEntity);
+    }
+
     ctx.restore();
 
-    // 3. Filtro ambiental de Noche (Cubre todo el canvas antes de la UI)
+    // 3. Filtro nocturno
     this.dayNightSystem.drawNightFilter(ctx, ctx.canvas.width, ctx.canvas.height);
 
-    // 4. UI Flotante HUD (Siempre al frente, brillante e inmóvil)
+    // 4. HUD Superior
     this.canvasHUD.draw(ctx, this);
+  }
+
+  /**
+   * Dibuja corchetes cibernéticos / retícula científica alrededor del espécimen seleccionado.
+   */
+  private drawSelectionReticle(ctx: CanvasRenderingContext2D, entity: Entity): void {
+    ctx.save();
+    const pos = entity.position;
+    const r = Math.max(entity.radius + 6, 14);
+    const bracketSize = Math.max(r * 0.45, 6);
+
+    ctx.strokeStyle = '#38bdf8'; // Cyan brillante
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+
+    // Esquina Superior Izquierda
+    ctx.beginPath();
+    ctx.moveTo(pos.x - r, pos.y - r + bracketSize);
+    ctx.lineTo(pos.x - r, pos.y - r);
+    ctx.lineTo(pos.x - r + bracketSize, pos.y - r);
+    ctx.stroke();
+
+    // Esquina Superior Derecha
+    ctx.beginPath();
+    ctx.moveTo(pos.x + r - bracketSize, pos.y - r);
+    ctx.lineTo(pos.x + r, pos.y - r);
+    ctx.lineTo(pos.x + r, pos.y - r + bracketSize);
+    ctx.stroke();
+
+    // Esquina Inferior Izquierda
+    ctx.beginPath();
+    ctx.moveTo(pos.x - r, pos.y + r - bracketSize);
+    ctx.lineTo(pos.x - r, pos.y + r);
+    ctx.lineTo(pos.x - r + bracketSize, pos.y + r);
+    ctx.stroke();
+
+    // Esquina Inferior Derecha
+    ctx.beginPath();
+    ctx.moveTo(pos.x + r - bracketSize, pos.y + r);
+    ctx.lineTo(pos.x + r, pos.y + r);
+    ctx.lineTo(pos.x + r, pos.y + r - bracketSize);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   public getStats() {
@@ -101,7 +153,7 @@ export class SimulationEngine {
       time: this.simulationTime.toFixed(2),
       day: this.dayNightSystem.currentDay,
       clock: this.dayNightSystem.getFormattedTime(),
-      isNight: this.dayNightSystem.isNight
+      isNight: this.dayNightSystem.isNight,
     };
   }
 }

@@ -3,6 +3,7 @@ import { Plant } from '../Plant';
 
 export class Grass extends Plant {
   public color: string;
+  public readonly speciesName: string = 'Hierba silvestre';
   
   // 1. Caché estática del sprite (se carga una sola vez en memoria)
   private static sprite: HTMLImageElement | null = null;
