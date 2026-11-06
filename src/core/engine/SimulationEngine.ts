@@ -1,85 +1,107 @@
 import { Environment } from '../world/Environment';
 import { Entity } from '../entities/Entity';
+import { DayNightSystem } from './DayNightSystem';
+import { CanvasHUD } from '../ui/CanvasHUD';
 
 export class SimulationEngine {
   public environment: Environment;
-  
-  // Lista centralizada de todos los organismos (plantas y animales)
   private entities: Entity[] = [];
 
-  // Variables de control de tiempo (Preparando el Punto 10 de tu roadmap)
+  // Controles de simulación y tiempo
   public simulationTime: number = 0;
-  public timeScale: number = 1.0; // Para acelerar o pausar la simulación (1x, 2x, 5x, 0x)
+  public timeScale: number = 1.0;
+  public isPaused: boolean = false;
+
+  // Subsistemas
+  public dayNightSystem: DayNightSystem;
+  public canvasHUD: CanvasHUD;
 
   constructor(environment: Environment) {
     this.environment = environment;
+    this.dayNightSystem = new DayNightSystem();
+    this.canvasHUD = new CanvasHUD();
   }
 
-  /**
-   * Registra una nueva entidad en la simulación.
-   */
   public addEntity(entity: Entity): void {
     this.entities.push(entity);
   }
 
+  public togglePause(): void {
+    this.isPaused = !this.isPaused;
+  }
+
   /**
-   * Bucle principal de lógica (Tick).
-   * Debe llamarse en cada frame antes de dibujar.
-   * @param realDeltaTime Tiempo real transcurrido desde el último frame.
+   * Conecta los eventos de click del canvas a la UI flotante.
    */
+  public attachInputListeners(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener('click', (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      // Intenta procesar el click en la UI
+      const handled = this.canvasHUD.handleClick(mouseX, mouseY, this);
+      
+      if (handled) {
+        // El click fue consumido por un botón de la UI (no afecta al mapa)
+        event.stopPropagation();
+      }
+    });
+  }
+
   public update(realDeltaTime: number): void {
-    // Aplicamos la velocidad de simulación al tiempo real
-    const scaledDeltaTime = realDeltaTime * this.timeScale;
+    // Si la simulación está pausada, el delta escalado es cero
+    const scaledDeltaTime = this.isPaused ? 0 : realDeltaTime * this.timeScale;
     
-    // Acumulamos el tiempo total de simulación
     this.simulationTime += scaledDeltaTime;
 
-    // Iteramos en reversa para poder eliminar entidades muertas 
-    // de forma segura sin alterar los índices del array durante el bucle.
+    // 1. Actualizar el ciclo Día/Noche
+    this.dayNightSystem.update(scaledDeltaTime);
+
+    // 2. Si está pausado, omitimos el movimiento de las entidades
+    if (this.isPaused) return;
+
+    // 3. Actualizar entidades (iteración inversa segura)
     for (let i = this.entities.length - 1; i >= 0; i--) {
       const entity = this.entities[i]!;
 
-      // Si la entidad murió (ya sea de hambre, cazada o por el bioma), la sacamos
       if (!entity.isAlive) {
         this.entities.splice(i, 1);
         continue;
       }
 
-      // Actualizamos la entidad pasándole el tiempo escalado y el mundo
       entity.update(scaledDeltaTime, this.environment, this.entities);
     }
   }
 
-  /**
-   * Bucle principal de renderizado.
-   * Dibuja primero el terreno y luego las entidades encima.
-   */
   public draw(ctx: CanvasRenderingContext2D): void {
-    // 1. El entorno limpia el canvas, aplica su propia cámara y dibuja el mapa (Biomas + Grid)
+    // 1. Terreno y Biomas (con su propia transformación de cámara)
     this.environment.draw(ctx);
 
-    // 2. Para dibujar las entidades correctamente, necesitamos aplicar la misma
-    // transformación de cámara (offset y zoom) que usa el Environment.
+    // 2. Entidades (con transformación de cámara)
     ctx.save();
     ctx.translate(this.environment.offset.x, this.environment.offset.y);
     ctx.scale(this.environment.zoom, this.environment.zoom);
 
-    // 3. Renderizamos todas las entidades
     for (const entity of this.entities) {
       entity.draw(ctx);
     }
-
     ctx.restore();
+
+    // 3. Filtro ambiental de Noche (Cubre todo el canvas antes de la UI)
+    this.dayNightSystem.drawNightFilter(ctx, ctx.canvas.width, ctx.canvas.height);
+
+    // 4. UI Flotante HUD (Siempre al frente, brillante e inmóvil)
+    this.canvasHUD.draw(ctx, this);
   }
 
-  /**
-   * Retorna información estadística de la simulación.
-   */
   public getStats() {
     return {
       totalEntities: this.entities.length,
       time: this.simulationTime.toFixed(2),
-      // Más adelante puedes separar conteos por subclases (ej. instanceof Animal)
+      day: this.dayNightSystem.currentDay,
+      clock: this.dayNightSystem.getFormattedTime(),
+      isNight: this.dayNightSystem.isNight
     };
   }
 }
