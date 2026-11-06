@@ -23,7 +23,52 @@ export class AgentFactory {
 
   public static createFox(position: Vector2D): Fox {
   return new Fox(position);
-}   
+}
+  public static rehydrateEntity(data: any, environment: Environment): Entity | null {
+    const pos = new Vector2D(Number(data.pos_x), Number(data.pos_y));
+    let entity: Entity | null = null;
+
+    if (data.entity_type === 'ANIMAL') {
+      if (data.species_name === 'Conejo') {
+        const rabbit = new Rabbit(pos);
+        rabbit.health = Number(data.health);
+        rabbit.energy = Number(data.energy);
+        rabbit.age = Number(data.age);
+        entity = rabbit;
+      } else if (data.species_name === 'Zorro') {
+        const fox = new Fox(pos);
+        fox.health = Number(data.health);
+        fox.energy = Number(data.energy);
+        fox.age = Number(data.age);
+        entity = fox;
+      }
+    } else if (data.entity_type === 'PLANT') {
+      if (data.species_name === 'Hierba' || data.species_name === 'Hierba silvestre') {
+        const grass = new Grass(pos);
+        grass.growth = Number(data.growth);
+        grass.age = Number(data.age);
+        grass.radius = grass.maxRadius * (0.2 + grass.growth * 0.8);
+        entity = grass;
+      } else if (data.species_name === 'Árbol') {
+        const tree = new Tree(pos);
+        tree.growth = Number(data.growth);
+        tree.age = Number(data.age);
+        tree.radius = tree.maxRadius * (0.2 + tree.growth * 0.8);
+        entity = tree;
+      }
+
+      if (entity) {
+        const cell = environment.getCellFromWorldPos(pos);
+        cell?.setPlant(entity);
+      }
+    }
+
+    if (entity && data.id) {
+      (entity as any).id = data.id;
+    }
+
+    return entity;
+  }   
 
   // --- 2. Generador de Población Inicial ---
   public static createInitialPopulation(environment: Environment): Entity[] {

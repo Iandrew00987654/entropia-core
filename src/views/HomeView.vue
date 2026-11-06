@@ -1,4 +1,4 @@
-<!-- src/views/HomeView.vue -->
+<!-- En HomeView.vue -->
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { Vector2D } from '@/core/math/Vector2D';
@@ -10,25 +10,25 @@ import { Plant } from '@/core/entities/Plant';
 import { Rabbit } from '@/core/entities/animals/Rabbit';
 import { Fox } from '@/core/entities/animals/Fox';
 import InspectorPanel from '@/components/InspectorPanel.vue';
+import SaveLoadModal from '@/components/SaveLoadModal.vue';
+import { SimulationService } from '@/services/simulationService';
 import type { InspectorTelemetry, AnimalInteractionData } from '@/types/telemetry';
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
+const isSaveModalOpen = ref(false);
 
 let environment: Environment;
 let engine: SimulationEngine;
 let animFrameId: number;
 let resizeObserver: ResizeObserver | null = null;
 let telemetryIntervalId: number;
-
 let lastTime = 0;
 
-// Navegación de cámara y detección de clics limpios
 let isDragging = false;
 let dragStartPos = new Vector2D(0, 0);
 let lastMousePos = new Vector2D(0, 0);
 let hasMoved = false;
 
-// Estado reactivo que alimenta el panel inspector
 const telemetry = ref<InspectorTelemetry>({
   mode: 'NONE',
   global: { total: 0, rabbits: 0, foxes: 0, plants: 0, day: 1, clock: '00:00', isNight: false }
@@ -52,7 +52,29 @@ const gameLoop = (timestamp: number, ctx: CanvasRenderingContext2D) => {
   animFrameId = requestAnimationFrame((nextTimestamp) => gameLoop(nextTimestamp, ctx));
 };
 
-// Sincronización a 10 Hz (desacoplada de los 60 FPS del canvas)
+// --- HANDLERS DE BASE DE DATOS (MARIADB) ---
+
+const handleSaveSimulation = async (name: string) => {
+  if (!engine) return;
+  try {
+    const payload = engine.serialize(name);
+    await SimulationService.save(payload);
+  } catch (error) {
+    console.error('Error al guardar simulación:', error);
+  }
+};
+
+const handleLoadSimulation = async (id: number) => {
+  if (!engine) return;
+  try {
+    const data = await SimulationService.getById(id);
+    engine.loadSnapshot(data);
+  } catch (error) {
+    console.error('Error al cargar simulación:', error);
+  }
+};
+
+// Sincronización de Telemetría a 10 Hz
 const updateTelemetryDTO = () => {
   if (!engine) return;
 
@@ -178,8 +200,7 @@ const updateTelemetryDTO = () => {
   }
 };
 
-// --- GESTIÓN DE ENTRADAS ---
-
+// Eventos de ratón
 const handleMouseDown = (e: MouseEvent) => {
   const canvas = canvasRef.value;
   if (!canvas || !engine) return;
@@ -219,7 +240,6 @@ const handleMouseUp = (e: MouseEvent) => {
     return;
   }
 
-  // Clic limpio (sin arrastre de cámara) -> Selección de entidad
   if (!hasMoved) {
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
@@ -293,8 +313,19 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans select-none">
-    <!-- CANVAS PRINCIPAL -->
+    
+    <!-- CANVAS PRINCIPAL CON BOTÓN FLOTANTE DE PERSISTENCIA -->
     <main class="flex-1 relative bg-slate-900 flex items-center justify-center p-3">
+      
+      <!-- BOTÓN SUPERIOR DERECHO: ABRIR MODAL BASE DE DATOS -->
+      <button 
+        @click="isSaveModalOpen = true"
+        class="absolute top-6 right-6 z-10 px-3.5 py-2 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs font-semibold text-slate-200 shadow-xl flex items-center space-x-2 backdrop-blur-md transition"
+      >
+        <span>💾</span>
+        <span>Gestionar Partidas</span>
+      </button>
+
       <canvas 
         ref="canvasRef" 
         @mousedown="handleMouseDown"
@@ -306,10 +337,18 @@ onUnmounted(() => {
       ></canvas>
     </main>
 
-    <!-- COMPONENTE DEDICADO DEL PANEL INSPECTOR -->
+    <!-- PANEL INSPECTOR LATERAL -->
     <InspectorPanel 
       :telemetry="telemetry" 
       @close="deselectEntity" 
+    />
+
+    <!-- MODAL CRUD DE MARIADB -->
+    <SaveLoadModal 
+      :is-open="isSaveModalOpen" 
+      @close="isSaveModalOpen = false"
+      @save="handleSaveSimulation"
+      @load="handleLoadSimulation"
     />
   </div>
 </template>

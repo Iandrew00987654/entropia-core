@@ -3,6 +3,9 @@ import { Entity } from '../entities/Entity';
 import { DayNightSystem } from './DayNightSystem';
 import { CanvasHUD } from '../ui/CanvasHUD';
 import { Vector2D } from '../math/Vector2D';
+import { AgentFactory } from '../entities/AgentFactory';
+import { Animal } from '../entities/Animal';
+import { Plant } from '../entities/Plant';
 
 export class SimulationEngine {
   public environment: Environment;
@@ -101,6 +104,79 @@ export class SimulationEngine {
 
     // 4. HUD Superior
     this.canvasHUD.draw(ctx, this);
+  }
+   public serialize(name: string = 'Reserva Activa') {
+    return {
+      name,
+      simulation_time: this.simulationTime,
+      current_day: this.dayNightSystem.currentDay,
+      clock: this.dayNightSystem.getFormattedTime(),
+      is_night: this.dayNightSystem.isNight,
+      entities: this.entities.map((e) => {
+        const base = {
+          id: e.id,
+          species_name: e.speciesName,
+          entity_type: e instanceof Animal ? 'ANIMAL' : 'PLANT',
+          is_alive: e.isAlive,
+          age: e.age,
+          pos_x: e.position.x,
+          pos_y: e.position.y,
+          radius: e.radius,
+        };
+
+        if (e instanceof Animal) {
+          return {
+            ...base,
+            health: e.health,
+            max_health: e.maxHealth,
+            energy: e.energy,
+            max_energy: e.maxEnergy,
+            speed: e.speed,
+            state_name: e.currentState?.name ?? 'WANDERING',
+            growth: null,
+            max_radius: null,
+          };
+        } else if (e instanceof Plant) {
+          return {
+            ...base,
+            health: null,
+            max_health: null,
+            energy: null,
+            max_energy: null,
+            speed: null,
+            state_name: null,
+            growth: e.growth,
+            max_radius: e.maxRadius,
+          };
+        }
+        return base;
+      }),
+    };
+  }
+
+  /**
+   * Carga una simulación proveniente de la API, reemplazando el ecosistema en memoria.
+   */
+  public loadSnapshot(snapshot: any): void {
+    this.selectedEntity = null;
+    this.entities = [];
+
+    // 1. Restaurar cronología
+    this.simulationTime = Number(snapshot.simulation.simulation_time);
+    this.dayNightSystem.currentDay = Number(snapshot.simulation.current_day);
+
+    // Calcular posición solar a partir del reloj digital (HH:MM)
+    const [hours, minutes] = (snapshot.simulation.clock || '00:00').split(':').map(Number);
+    const totalMinutes = (hours || 0) * 60 + (minutes || 0);
+    this.dayNightSystem.timeInCycle = (totalMinutes / (24 * 60)) * this.dayNightSystem.cycleDuration;
+
+    // 2. Reconstruir entidades
+    for (const raw of snapshot.entities) {
+      const entity = AgentFactory.rehydrateEntity(raw, this.environment);
+      if (entity) {
+        this.addEntity(entity);
+      }
+    }
   }
 
   /**
