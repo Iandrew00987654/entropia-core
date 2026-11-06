@@ -1,18 +1,18 @@
 export class DayNightSystem {
-  public readonly cycleDuration: number = 120; // 120 segundos por día simulado
+  public readonly cycleDuration: number = 120; // 120 segundos simulados por día completo
   public currentDay: number = 1;
-  public timeInCycle: number = 0; // Temporizador interno (0 a 120s)
-  public ambientAlpha: number = 0; // Opacidad de la sombra (0.0 = pleno día, 0.65 = medianoche)
+  public timeInCycle: number = 0; // Temporizador continuo (0 a 120s)
+  public ambientAlpha: number = 0; // Opacidad del filtro (0.0 = pleno sol, 0.70 = medianoche)
   public isNight: boolean = false;
 
-  // Callback preparado para el Punto 6 (Regeneración de vegetación al amanecer)
+  // Callback preparado para la regeneración de plantas al amanecer
   public onNewDay?: (day: number) => void;
 
   public update(deltaTime: number): void {
     this.timeInCycle += deltaTime;
 
-    // Transición al siguiente día
-    if (this.timeInCycle >= this.cycleDuration) {
+    // Uso de 'while' para proteger contra saltos de frame en velocidades altas (5x)
+    while (this.timeInCycle >= this.cycleDuration) {
       this.timeInCycle -= this.cycleDuration;
       this.currentDay++;
       if (this.onNewDay) {
@@ -20,32 +20,33 @@ export class DayNightSystem {
       }
     }
 
-    // Progreso del día normalizado (0.0 a 1.0)
+    // Progreso normalizado del día: 0.0 (00:00) a 1.0 (24:00)
     const progress = this.timeInCycle / this.cycleDuration;
+    const currentHour = progress * 24;
 
-    // Onda sinusoidal de luz (Sol en alto a progress = 0.25, Noche cerrada a progress = 0.75)
-    const normalizedLight = Math.sin((progress - 0.25) * Math.PI * 2);
-    
-    // Convertimos el rango (-1 a 1) en opacidad de oscuridad (0.0 a 0.68)
-    this.ambientAlpha = Math.max(0, normalizedLight * 0.68);
-    this.isNight = this.ambientAlpha > 0.35;
+    // Curva astronómica: pico de sombra a las 00:00 (cos = 1) y 0 sombra de 06:00 a 18:00
+    const rawDarkness = Math.cos(progress * Math.PI * 2);
+    this.ambientAlpha = Math.max(0, rawDarkness * 0.70);
+
+    // Es noche si el reloj marca entre las 18:00 y las 06:00
+    this.isNight = currentHour < 6 || currentHour >= 18;
   }
 
   /**
-   * Aplica la capa de oscuridad sobre todo el mundo 2D.
+   * Aplica la capa de oscuridad atmosférica sobre el Canvas.
    */
   public drawNightFilter(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    if (this.ambientAlpha <= 0.01) return;
+    if (this.ambientAlpha <= 0.005) return;
 
     ctx.save();
-    // Azul marino/púrpura de medianoche
+    // Azul marino medianoche profundo
     ctx.fillStyle = `rgba(6, 12, 34, ${this.ambientAlpha.toFixed(3)})`;
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
   }
 
   /**
-   * Formatea la hora simulada a un reloj digital (ej: 14:30)
+   * Formatea la hora a un reloj digital de 24 horas (HH:MM)
    */
   public getFormattedTime(): string {
     const totalMinutes = Math.floor((this.timeInCycle / this.cycleDuration) * 24 * 60);
