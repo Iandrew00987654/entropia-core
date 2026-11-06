@@ -14,7 +14,7 @@ export class RestState implements State<Animal> {
 
   public update(agent: Animal, deltaTime: number, _environment: Environment, entities: Entity[]): void {
     // 1. Alerta de depredador: Si viene un zorro, se despierta para huir
-    if (this.hasNearbyThreat(agent, entities)) {
+    if (!agent.isPredator && this.hasNearbyThreat(agent, entities)) {
       if ((agent as any).fleeState) {
         agent.changeState((agent as any).fleeState);
       }
